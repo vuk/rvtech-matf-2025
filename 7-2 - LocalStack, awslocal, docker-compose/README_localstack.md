@@ -2,7 +2,7 @@
 awslocal lambda list-functions
 
 ### Dodavanje nove JavaScript Lambda funkcije u LocalStack
-First zip the function `zip function.zip index.js`
+Prvo je potrebno da zipujemo nasu funkciju `zip function.zip index.js`
 
 Koriscenjem awslocal skripte
 ```
@@ -18,7 +18,7 @@ awslocal lambda create-function \
 `awslocal lambda invoke --function-name hello-world /dev/stdout`
 
 ### Izmeni kod vec postojece Lambda funkcije u LocalStack-u
-First zip the updated function `zip function.zip index.js`
+Prvo je potrebno da zipujemo nasu funkciju `zip function.zip index.js`
 ```
 awslocal lambda update-function-code \
 --function-name hello-world \
