@@ -7,7 +7,59 @@ plugins:
 provider:
   name: aws
   runtime: nodejs18.x
+  stage: ${opt:stage, 'dev'}
 
 functions:
-  function1:
-    handler: index.handler
+  getChargers:
+    handler: getChargers.handler
+    description: Get all chargers
+    events:
+      - http:
+          path: chargers
+          method: get
+  syncOCMdata:
+    handler: syncOCMdata.handler
+    description: Sync data from Open Charge Map
+    events:
+      - http:
+          path: sync-ocm-data
+          method: get
+      - schedule:
+          rate: rate(1 minute)
+custom:
+  chargersTable: ChargersTable-${self:provider.stage}
+
+resources:
+  Resources:
+    ChargersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.chargersTable}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+
+    # http:/punjaci-website-dev.s3-website.localhost.localstack.cloud:4566
+    WebsiteBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: punjaci-website-${self:provider.stage}
+        AccessControl: PublicRead
+        WebsiteConfiguration:
+          IndexDocument: index.html
+          ErrorDocument: error.html
+    WebsiteBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref WebsiteBucket
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal: "*"
+              Action: s3:GetObject
+              Resource: !Join ["", ["arn:aws:s3:::", !Ref WebsiteBucket, "/*"]]
