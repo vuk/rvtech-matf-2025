@@ -1,5 +1,5 @@
 // http://j7yqnoc8so.execute-api.localhost.localstack.cloud:4566/dev/chargers
-exports.handler = async () => {
+exports.getChargers = async () => {
   console.log("Getting chargers...");
 
   return {

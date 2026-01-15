@@ -1,4 +1,4 @@
-exports.handler = async () => {
+exports.syncOCM = async () => {
   console.log("Syncking OCM data...");
 
   return {

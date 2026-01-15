@@ -7,47 +7,44 @@ plugins:
 provider:
   name: aws
   runtime: nodejs18.x
-  stage: ${opt:stage, 'dev'}
 
 functions:
+  # Function to get all chargers from DynamoDB
   getChargers:
-    handler: getChargers.handler
+    handler: getChargers.getChargers
     description: Get all chargers
     events:
       - http:
           path: chargers
           method: get
+  # Function to sync data from Open Charge Map every minute
   syncOCMdata:
-    handler: syncOCMdata.handler
+    handler: syncOCMdata.syncOCM
     description: Sync data from Open Charge Map
     events:
-      - http:
-          path: sync-ocm-data
-          method: get
       - schedule:
           rate: rate(1 minute)
-custom:
-  chargersTable: ChargersTable-${self:provider.stage}
 
 resources:
   Resources:
+    # DynamoDB Table for chargers
     ChargersTable:
       Type: AWS::DynamoDB::Table
       Properties:
-        TableName: ${self:custom.chargersTable}
+        TableName: Chargers
         BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
-          - AttributeName: id
+          - AttributeName: chargeId
             AttributeType: S
         KeySchema:
-          - AttributeName: id
+          - AttributeName: chargeId
             KeyType: HASH
-
-    # http:/punjaci-website-dev.s3-website.localhost.localstack.cloud:4566
+    # http:/punjaci-website.s3-website.localhost.localstack.cloud:4566
+    # S3 Bucket for static website hosting
     WebsiteBucket:
       Type: AWS::S3::Bucket
       Properties:
-        BucketName: punjaci-website-${self:provider.stage}
+        BucketName: punjaci-website
         AccessControl: PublicRead
         WebsiteConfiguration:
           IndexDocument: index.html

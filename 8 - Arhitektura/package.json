@@ -8,7 +8,7 @@
   },
   "author": "",
   "license": "ISC",
-  "dependencies": {
+  "devDependencies": {
     "serverless": "^3.40.0",
     "serverless-localstack": "^1.3.1"
   }
