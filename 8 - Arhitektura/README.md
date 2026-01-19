@@ -1,78 +1,78 @@
-# Project Setup and Deployment Instructions
+# Instrukcije za podešavanje i deploy projekta
 
-## Prerequisites
+## Preduslovi
 
-- Docker and Docker Compose installed
-- Node.js and npm installed
+- Docker i Docker Compose instalirani
+- Node.js i npm instalirani
 
-## 1. Clean Up Docker Environment
+## 1. Očisti Docker okruženje
 
-Before starting, clean up the existing LocalStack container if it's running:
+Pre početka, očisti postojeći LocalStack kontejner ako je pokrenut:
 
 ```bash
-# Find the LocalStack container ID
+# Pronađi ID LocalStack kontejnera
 docker ps -a
 
-# Stop the specific LocalStack container (replace CONTAINER_ID with actual ID)
+# Zaustavi specifični LocalStack kontejner (zameni CONTAINER_ID stvarnim ID-jem)
 docker stop CONTAINER_ID
 
-# Remove the specific container
+# Ukloni specifični kontejner
 docker rm CONTAINER_ID
 
 ```
 
-## 2. Start LocalStack with Docker Compose
+## 2. Pokreni LocalStack sa Docker Compose
 
-Run LocalStack to simulate AWS services locally:
+Pokreni LocalStack za simulaciju AWS servisa lokalno:
 
 ```bash
-# Start LocalStack in detached mode
+# Pokreni LocalStack u detached režimu
 docker-compose up
 
-# Verify LocalStack is running
+# Proveri da li LocalStack radi
 docker ps
 
 ```
 
-If `docker-compose` command is not found try `docker compose`.
+Ako `docker-compose` komanda nije pronađena, pokušaj `docker compose`.
 
-LocalStack will be available at `http://localhost:4566`
+LocalStack će biti dostupan na `http://localhost:4566`
 
-## 3. Deploy Serverless Configuration
+## 3. Deploy Serverless konfiguracije
 
-Deploy your serverless functions to LocalStack:
+Deploy-uj serverless funkcije na LocalStack:
 
 ```bash
-# Install serverless dependencies
+# Instaliraj serverless dependencije
 npm install
 
-# Deploy to LocalStack
+# Deploy na LocalStack
 npx serverless deploy
 ```
 
-This will deploy your Lambda functions, API Gateway, and other AWS resources to LocalStack.
+Ovo će deploy-ovati Lambda funkcije, API Gateway i ostale AWS resurse na LocalStack.
 
-## 4. Deploy Static Site to S3
+## 4. Deploy statičkog sajta na S3
 
-Upload your static website files to the S3 bucket:
+Otpremi fajlove statičkog veb sajta u S3 bucket:
 
 ```bash
-# Sync static files to S3 bucket
+# Sinhronizuj statičke fajlove sa S3 bucket-om
 awslocal s3 sync ./web s3://punjaci-website
 ```
 
-## 5. Access Your Application
+## 5. Pristupi aplikaciji
 
-- **API Endpoints**: Check the serverless deploy output for API Gateway URLs
+- **API Endpoints**: Proveri serverless deploy izlaz za API Gateway URL-ove
   ![alt text](docs/image.png)
 
-  - use `endpoint` url and add a path for your function, e.g `/chargers`
-  - Example: [http://localhost:4566/restapis/njwtb39abc/dev/_user_request_/chargers](http://localhost:4566/restapis/njwtb39abc/dev/_user_request_/chargers)
+  - koristi `endpoint` url i dodaj putanju za svoju funkciju, npr. `/chargers`
+  - Primer: [http://localhost:4566/restapis/njwtb39abc/dev/_user_request_/chargers](http://localhost:4566/restapis/njwtb39abc/dev/_user_request_/chargers)
 
 - **S3 Website**: [http://punjaci-website.s3-website.localhost.localstack.cloud:4566](http://punjaci-website.s3-website.localhost.localstack.cloud:4566)
 
-## 6.(Optional) Sign in to Localstack website to access Localstack UI
+## 6.(Opciono) Prijaviš se na Localstack veb sajt da pristupiš Localstack UI
 
 - [https://app.localstack.cloud/sign-in](https://app.localstack.cloud/sign-in)
-- Click on available instance on the left, and select `Status` tab to see running services
+- Klikni na dostupnu instancu levo, i izaberi `Status` tab da vidiš pokrenute servise
   ![alt text](docs/image-1.png)
