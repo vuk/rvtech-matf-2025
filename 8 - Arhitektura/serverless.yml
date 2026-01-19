@@ -1,0 +1,62 @@
+service: punjaci
+frameworkVersion: "3"
+
+plugins:
+  - serverless-localstack
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+
+functions:
+  # Function to get all chargers from DynamoDB
+  getChargers:
+    handler: getChargers.getChargers
+    description: Get all chargers
+    events:
+      - http:
+          path: chargers
+          method: get
+  # Function to sync data from Open Charge Map every minute
+  syncOCMdata:
+    handler: syncOCMdata.syncOCM
+    description: Sync data from Open Charge Map
+    events:
+      - schedule:
+          rate: rate(1 minute)
+
+resources:
+  Resources:
+    # DynamoDB Table for chargers
+    ChargersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: Chargers
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: chargeId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: chargeId
+            KeyType: HASH
+    # http:/punjaci-website.s3-website.localhost.localstack.cloud:4566
+    # S3 Bucket for static website hosting
+    WebsiteBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: punjaci-website
+        AccessControl: PublicRead
+        WebsiteConfiguration:
+          IndexDocument: index.html
+          ErrorDocument: error.html
+    WebsiteBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref WebsiteBucket
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal: "*"
+              Action: s3:GetObject
+              Resource: !Join ["", ["arn:aws:s3:::", !Ref WebsiteBucket, "/*"]]
