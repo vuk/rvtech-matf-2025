@@ -107,6 +107,7 @@ awslocal s3 sync ./web s3://punjaci-website
   - Primer: [http://localhost:4566/restapis/njwtb39abc/dev/_user_request_/chargers](http://localhost:4566/restapis/njwtb39abc/dev/_user_request_/chargers)
 
 - **S3 Website**: [http://punjaci-website.s3-website.localhost.localstack.cloud:4566](http://punjaci-website.s3-website.localhost.localstack.cloud:4566)
+  - Format: `http://{bucket-name}.s3-website.localhost.localstack.cloud:4566`
 
 ## 6.(Opciono) Prijaviš se na Localstack veb sajt da pristupiš Localstack UI
 
