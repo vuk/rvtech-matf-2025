@@ -1,0 +1,5 @@
+# LocalStack volume directory
+volume/
+
+# Lambda function zip files
+*.zip
