@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "deploy-frontend": "S3_BUCKET_NAME=${npm_config_s3_bucket_name:-punjaci-website} && awslocal s3 sync ./web s3://$S3_BUCKET_NAME",
+    "deploy-frontend-fixed-bucket": "awslocal s3 sync ./web s3://punjaci-website",
     "redeploy": "docker-compose down -v && docker-compose up -d && sleep 5 && npx serverless deploy"
   },
   "author": "",

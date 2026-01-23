@@ -1,5 +1,6 @@
 service: punjaci                    		# Naziv serverless aplikacije/servisa
 frameworkVersion: "3"               		# Verzija Serverless Framework-a
+# useDotenv: true                     		# Učitaj varijable iz .env fajla
 
 plugins:
   - serverless-localstack           		# Plugin koji omogućava deploy na LocalStack
@@ -9,19 +10,20 @@ provider:
   runtime: nodejs18.x               		# Lambda runtime okruženje
   region: us-east-1                 		# AWS region za deploy
   environment:                      		# Environment varijable dostupne Lambda funkcijama
+    # OCM_API_KEY: ${env:OCM_API_KEY}   # API ključ za Open Charge Map (iz .env fajla)
     OCM_API_KEY: '69d86e58-df21-406b-b837-cc07c35ddd41'   # API ključ za Open Charge Map
     OCM_URL: 'https://api.openchargemap.io/v3/poi'        # URL za OCM API
     CHARGERS_TABLE: Chargers        		# Naziv DynamoDB tabele
-    # dodaj ovde nešto - šta? ili bolje ipak negde drugde? :)
 
 functions:                          		# Sekcija koja definiše Lambda funkcije
   syncOCMdata:                      		# Naziv funkcije (logički ID)
     handler: index.handler          		# Fajl.nazivFunkcije (index.js exports.handler)
-    description: Sync data from Open Charge Map  		
+    description: Sync data from Open Charge Map
+    role: SyncOCMDataRole           		# Referenca na IAM rolu definisanu u resources
     events:                         		# Okidači za ovu funkciju
       - schedule:
           rate: rate(1 minute)      		# Pokreće se svakog minuta (CloudWatch Events)
-      # olakšava demonstraciju na LocalStack-u
+      # olakšava demonstraciju na LocalStack-u, ali nije potrebno za projekat
       - http:                       		# API Gateway HTTP endpoint
           path: sync                		# Putanja: /sync
           method: get               		# HTTP metoda: GET
@@ -34,12 +36,12 @@ resources:                          		# CloudFormation resursi sekcija
         TableName: ${self:provider.environment.CHARGERS_TABLE}         		# Stvarno ime tabele u DynamoDB
         BillingMode: PAY_PER_REQUEST  		# Plaćanje po zahtevu (bez planiranja kapaciteta)
         AttributeDefinitions:       		# Definišu se atributi koji se koriste u ključevima
-          - AttributeName: chargeId 		# Atribut primarnog ključa
+          - AttributeName: chargerId 		# Atribut primarnog ključa
             AttributeType: S        		# tip - string
           - AttributeName: town     		# Atribut za GSI ključ
             AttributeType: S        		# tip - string
         KeySchema:                  		# Struktura primarnog ključa
-          - AttributeName: chargeId 		# Partition ključ
+          - AttributeName: chargerId 		# Partition ključ
             KeyType: HASH           		# HASH = partition ključ
         GlobalSecondaryIndexes:     		# Sekundarni indeksi za upite
           - IndexName: TownIndex    		# Naziv indeksa
@@ -48,7 +50,7 @@ resources:                          		# CloudFormation resursi sekcija
                 KeyType: HASH       		# HASH = partition ključ
             Projection:             		# Šta uključiti u indeks
               ProjectionType: ALL   		# Uključi sve atribute
-        # Poboljšanje: Koristi TTL umesto Scan za automatsko brisanje zastarelih zapisa
+        # Opcija: TTL umesto Scan za automatsko brisanje zastarelih zapisa
         # TimeToLiveSpecification:
         #   AttributeName: ttl      		# Atribut koji sadrži Unix timestamp isteka
         #   Enabled: true           		# DynamoDB automatski briše istekle zapise
@@ -72,3 +74,40 @@ resources:                          		# CloudFormation resursi sekcija
               Principal: "*"        		# Svako može pristupiti
               Action: s3:GetObject  		# Može čitati objekte
               Resource: !Join ["", ["arn:aws:s3:::", !Ref WebsiteBucket, "/*"]]  		# Svi objekti u bucket-u
+    # IAM rola za Lambda funkciju, nije potrebna kad je u pitanju localstack, ali treba za AWS
+    SyncOCMDataRole:
+      Type: AWS::IAM::Role              # CloudFormation tip - IAM rola
+      Properties:
+        RoleName: syncOCMdata-role-${sls:stage}     # Ime role vidljivo u LocalStack/AWS konzoli
+        AssumeRolePolicyDocument:       # Trust policy - ko može preuzeti ovu rolu
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com  # Lambda servis može preuzeti rolu
+              Action: sts:AssumeRole
+        Policies:                       # Inline polise priključene roli
+          - PolicyName: DynamoDBAccess    # Polisa za pristup DynamoDB
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow         # Dozvoli DynamoDB operacije
+                  Action:
+                    - dynamodb:PutItem
+                    - dynamodb:BatchWriteItem
+                    - dynamodb:Scan
+                    - dynamodb:Query
+                    - dynamodb:DeleteItem
+                  Resource:
+                    - !GetAtt ChargersTable.Arn                              # ARN tabele
+                    - !Join ['/', [!GetAtt ChargersTable.Arn, 'index/*']]    # ARN indeksa
+          - PolicyName: CloudWatchLogs    # Polisa za Lambda logove
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource: "*"

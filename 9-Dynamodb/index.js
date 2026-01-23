@@ -4,6 +4,7 @@ const { DynamoDBDocumentClient, BatchWriteCommand, ScanCommand } = require('@aws
 const OCM_API_KEY = process.env.OCM_API_KEY;
 const OCM_URL = process.env.OCM_URL;
 const TABLE_NAME = process.env.CHARGERS_TABLE;
+const BATCH_SIZE = 25;  // DynamoDB BatchWriteItem limit (max 25 items per batch)
 
 // Configure DynamoDB client for LocalStack
 // LOCALSTACK_HOSTNAME is set automatically when Lambda runs inside LocalStack container
@@ -12,6 +13,7 @@ const DYNAMODB_ENDPOINT = process.env.LOCALSTACK_HOSTNAME
   : 'http://localhost:4566';
 
 console.log('DynamoDB endpoint:', DYNAMODB_ENDPOINT);
+console.log('OCM API KEY:', OCM_API_KEY);
 
 const client = new DynamoDBClient({
   endpoint: DYNAMODB_ENDPOINT,
@@ -44,12 +46,20 @@ exports.handler = async () => {
     console.log('Example charger:', JSON.stringify(chargers[0], null, 2));
 
     // Store only selected fields
-    const syncTimestamp = new Date().toISOString();
+    const ttl = Math.floor(Date.now() / 1000) + 2 * 24 * 60 * 60;  // TTL: 2 dana od sada (Unix timestamp u sekundama)
+    
+    // Normalize town names (Belgrade has multiple spellings in OCM data + check postcode)
+    const normalizeTown = (town, postcode) => {
+      if (['Belgrad', 'Belgrade', 'Beograd'].includes(town)) return 'Belgrade';
+      if (postcode?.startsWith('11')) return 'Belgrade';  // Belgrade postal codes: 11000-11999
+      return town || 'Unknown';
+    };
+    
     const items = chargers.map(charger => ({
-      chargeId: String(charger.ID),                         // Primary key
-      id: charger.ID,
+      chargerId: String(charger.ID),                         // Primary key
       uuid: charger.UUID,
-      town: charger.AddressInfo?.Town || 'Unknown',         // GSI key
+      town: normalizeTown(charger.AddressInfo?.Town, charger.AddressInfo?.Postcode),  // GSI key (normalized)
+      townRaw: charger.AddressInfo?.Town || 'Unknown',       // Original town name from OCM
       title: charger.AddressInfo?.Title,
       addressLine1: charger.AddressInfo?.AddressLine1,      // Street
       addressLine2: charger.AddressInfo?.AddressLine2,      // District/area
@@ -61,14 +71,23 @@ exports.handler = async () => {
       dateLastVerified: charger.DateLastVerified,
       dateLastStatusUpdate: charger.DateLastStatusUpdate,
       numberOfPoints: charger.NumberOfPoints,               // Charging connectors count
-      lastSyncedAt: syncTimestamp,                          // For cleanup
+      ttl,                       // (opciono, ne koristimo) DynamoDB TTL - automatsko brisanje nakon 2 dana
     }));
+
+    // Log town statistics if you want to see
+    // const belgradeCount = items.filter(item => item.town === 'Belgrade').length;
+    // const townCounts = items.reduce((acc, item) => {
+    //   acc[item.town] = (acc[item.town] || 0) + 1;
+    //   return acc;
+    // }, {});
+    // console.log(`Belgrade chargers: ${belgradeCount}/${items.length}`);
+    // console.log('Chargers by town:', townCounts);
 
     // Insert/update all OCM records (upsert)
     // Future improvement: use Promise.all(batches.map(...)) to run batches in parallel for faster writes
     const batches = [];
-    for (let i = 0; i < items.length; i += 25) {
-      batches.push(items.slice(i, i + 25));
+    for (let i = 0; i < items.length; i += BATCH_SIZE) {
+      batches.push(items.slice(i, i + BATCH_SIZE));
     }
 
     for (const batch of batches) {
@@ -85,30 +104,32 @@ exports.handler = async () => {
     }
     console.log(`Written ${items.length} chargers to DynamoDB`);
 
-    // Delete only stale records (exist in DB but not in OCM)
-    const currentIds = new Set(items.map(item => item.chargeId));
+
+    // ------------------------------------------------------------
+    // If we want to delete stale records (exist in DB but not in OCM)
+    const currentIds = new Set(items.map(item => item.chargerId));
     const scanResult = await docClient.send(new ScanCommand({
       TableName: TABLE_NAME,
-      ProjectionExpression: 'chargeId',
+      ProjectionExpression: 'chargerId',
     }));
 
     console.log("scanResult =>", scanResult);
     const staleIds = (scanResult.Items || [])
-      .map(item => item.chargeId)
+      .map(item => item.chargerId)
       .filter(id => !currentIds.has(id));
     console.log("staleIds =>", staleIds);    
     let deletedCount = 0;
     if (staleIds.length > 0) {
       console.log(`Deleting ${staleIds.length} stale records...`);
       const deleteBatches = [];
-      for (let i = 0; i < staleIds.length; i += 25) {
-        deleteBatches.push(staleIds.slice(i, i + 25));
+      for (let i = 0; i < staleIds.length; i += BATCH_SIZE) {
+        deleteBatches.push(staleIds.slice(i, i + BATCH_SIZE));
       }
       for (const batch of deleteBatches) {
         try {
           await docClient.send(new BatchWriteCommand({
             RequestItems: {
-              [TABLE_NAME]: batch.map(id => ({ DeleteRequest: { Key: { chargeId: id } } }))
+              [TABLE_NAME]: batch.map(id => ({ DeleteRequest: { Key: { chargerId: id } } }))
             }
           }));
         } catch (deleteError) {

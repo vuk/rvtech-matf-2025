@@ -2,3 +2,4 @@
 .vscode
 node_modules
 .serverless
+# .env (ukoliko OCM_API_KEY drzite u .env fajlu)
