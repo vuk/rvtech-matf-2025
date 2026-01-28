@@ -74,6 +74,10 @@ Kompletna aplikacija je dostupna na:
 
 **http://punjaci-website.s3-website.localhost.localstack.cloud:4566/**
 
+### Primer aplikacije
+
+![Primer mape sa punjačima](primerMape.png)
+
 ### Funkcionalnosti:
 
 - ✅ **Mapa** - Prikaz punjača na interaktivnoj mapi (Leaflet)
