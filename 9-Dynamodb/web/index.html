@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hello World - EV Chargers</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+
+      .container {
+        text-align: center;
+        padding: 2rem;
+      }
+
+      h1 {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        animation: fadeIn 1s ease-in;
+      }
+
+      p {
+        font-size: 1.2rem;
+        opacity: 0.9;
+        animation: fadeIn 1s ease-in 0.5s both;
+      }
+
+      button {
+        margin-top: 1.5rem;
+        padding: 0.8rem 2rem;
+        font-size: 1rem;
+        border: none;
+        border-radius: 8px;
+        background: white;
+        color: #667eea;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+        animation: fadeIn 1s ease-in 1s both;
+      }
+
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+
+      button:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+      }
+
+      #status {
+        margin-top: 1rem;
+        font-size: 0.9rem;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Hello World!</h1>
+      <p>Welcome to EV Chargers API</p>
+      <button id="syncBtn">Get Chargers from OCM and write to DynamoDB</button>
+      <p id="status"></p>
+    </div>
+    <script>
+      // LocalStack API Gateway endpoint (promeni svaki put posle deploya)
+      const API_URL = 'http://localhost:4566/restapis/rf9dlu7k3y/dev/_user_request_/sync';
+      
+      document.getElementById('syncBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('syncBtn');
+        const status = document.getElementById('status');
+        
+        btn.disabled = true;
+        btn.textContent = 'Syncing...';
+        status.textContent = '';
+        
+        try {
+          const response = await fetch(API_URL, { method: 'GET' });
+          const data = await response.json();
+          status.textContent = 'Sync completed successfully!';
+          console.log(data);
+        } catch (error) {
+          status.textContent = 'Error: ' + error.message;
+          console.error(error);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Get Chargers from OCM and write to DynamoDB';
+        }
+      });
+    </script>
+  </body>
+</html>

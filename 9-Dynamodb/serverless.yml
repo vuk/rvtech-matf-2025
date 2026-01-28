@@ -1,0 +1,113 @@
+service: punjaci                    		# Naziv serverless aplikacije/servisa
+frameworkVersion: "3"               		# Verzija Serverless Framework-a
+# useDotenv: true                     		# Učitaj varijable iz .env fajla
+
+plugins:
+  - serverless-localstack           		# Plugin koji omogućava deploy na LocalStack
+
+provider:
+  name: aws                         		# Cloud provajder (AWS)
+  runtime: nodejs18.x               		# Lambda runtime okruženje
+  region: us-east-1                 		# AWS region za deploy
+  environment:                      		# Environment varijable dostupne Lambda funkcijama
+    # OCM_API_KEY: ${env:OCM_API_KEY}   # API ključ za Open Charge Map (iz .env fajla)
+    OCM_API_KEY: '69d86e58-df21-406b-b837-cc07c35ddd41'   # API ključ za Open Charge Map
+    OCM_URL: 'https://api.openchargemap.io/v3/poi'        # URL za OCM API
+    CHARGERS_TABLE: Chargers        		# Naziv DynamoDB tabele
+
+functions:                          		# Sekcija koja definiše Lambda funkcije
+  syncOCMdata:                      		# Naziv funkcije (logički ID)
+    handler: index.handler          		# Fajl.nazivFunkcije (index.js exports.handler)
+    description: Sync data from Open Charge Map
+    role: SyncOCMDataRole           		# Referenca na IAM rolu definisanu u resources
+    events:                         		# Okidači za ovu funkciju
+      - schedule:
+          rate: rate(1 minute)      		# Pokreće se svakog minuta (CloudWatch Events)
+      # olakšava demonstraciju na LocalStack-u, ali nije potrebno za projekat
+      - http:                       		# API Gateway HTTP endpoint
+          path: sync                		# Putanja: /sync
+          method: get               		# HTTP metoda: GET
+
+resources:                          		# CloudFormation resursi sekcija
+  Resources:                        		# AWS resursi za kreiranje
+    ChargersTable:                  		# Logičko ime resursa 
+      Type: AWS::DynamoDB::Table    		# CloudFormation tip resursa
+      Properties:
+        TableName: ${self:provider.environment.CHARGERS_TABLE}         		# Stvarno ime tabele u DynamoDB
+        BillingMode: PAY_PER_REQUEST  		# Plaćanje po zahtevu (bez planiranja kapaciteta)
+        AttributeDefinitions:       		# Definišu se atributi koji se koriste u ključevima
+          - AttributeName: chargerId 		# Atribut primarnog ključa
+            AttributeType: S        		# tip - string
+          - AttributeName: town     		# Atribut za GSI ključ
+            AttributeType: S        		# tip - string
+        KeySchema:                  		# Struktura primarnog ključa
+          - AttributeName: chargerId 		# Partition ključ
+            KeyType: HASH           		# HASH = partition ključ
+        GlobalSecondaryIndexes:     		# Sekundarni indeksi za upite
+          - IndexName: TownIndex    		# Naziv indeksa
+            KeySchema:              		# Struktura ključa indeksa
+              - AttributeName: town 		# GSI partition ključ
+                KeyType: HASH       		# HASH = partition ključ
+            Projection:             		# Šta uključiti u indeks
+              ProjectionType: ALL   		# Uključi sve atribute
+        # Opcija: TTL umesto Scan za automatsko brisanje zastarelih zapisa
+        # TimeToLiveSpecification:
+        #   AttributeName: ttl      		# Atribut koji sadrži Unix timestamp isteka
+        #   Enabled: true           		# DynamoDB automatski briše istekle zapise
+    # S3 bucket za statički veb sajt
+    WebsiteBucket:                  		# S3 bucket za statički sajt
+      Type: AWS::S3::Bucket         		# CloudFormation tip resursa
+      Properties:
+        BucketName: punjaci-website 		# Naziv bucket-a
+        AccessControl: PublicRead   		# Dozvoli javni pristup
+        WebsiteConfiguration:       		# Omogući hosting statičkog sajta
+          IndexDocument: index.html 		# Početna stranica
+          ErrorDocument: error.html 		# 404 stranica
+    WebsiteBucketPolicy:            		# Polisa dozvola za bucket
+      Type: AWS::S3::BucketPolicy   		# CloudFormation tip resursa
+      Properties:
+        Bucket: !Ref WebsiteBucket  		# Referenca na bucket iznad
+        PolicyDocument:             		# IAM policy dokument
+          Version: "2012-10-17"     		# Verzija policy jezika
+          Statement:
+            - Effect: Allow         		# Dozvoli akciju
+              Principal: "*"        		# Svako može pristupiti
+              Action: s3:GetObject  		# Može čitati objekte
+              Resource: !Join ["", ["arn:aws:s3:::", !Ref WebsiteBucket, "/*"]]  		# Svi objekti u bucket-u
+    # IAM rola za Lambda funkciju, nije potrebna kad je u pitanju localstack, ali treba za AWS
+    SyncOCMDataRole:
+      Type: AWS::IAM::Role              # CloudFormation tip - IAM rola
+      Properties:
+        RoleName: syncOCMdata-role-${sls:stage}     # Ime role vidljivo u LocalStack/AWS konzoli
+        AssumeRolePolicyDocument:       # Trust policy - ko može preuzeti ovu rolu
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com  # Lambda servis može preuzeti rolu
+              Action: sts:AssumeRole
+        Policies:                       # Inline polise priključene roli
+          - PolicyName: DynamoDBAccess    # Polisa za pristup DynamoDB
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow         # Dozvoli DynamoDB operacije
+                  Action:
+                    - dynamodb:PutItem
+                    - dynamodb:BatchWriteItem
+                    - dynamodb:Scan
+                    - dynamodb:Query
+                    - dynamodb:DeleteItem
+                  Resource:
+                    - !GetAtt ChargersTable.Arn                              # ARN tabele
+                    - !Join ['/', [!GetAtt ChargersTable.Arn, 'index/*']]    # ARN indeksa
+          - PolicyName: CloudWatchLogs    # Polisa za Lambda logove
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource: "*"
