@@ -70,7 +70,7 @@ npm run deploy-frontend-fixed-bucket
 
 ## Pristup aplikaciji
 
-Kompletna aplikacija je dostupna na:
+Aplikacija će trčati na:
 
 **http://punjaci-website.s3-website.localhost.localstack.cloud:4566/**
 
