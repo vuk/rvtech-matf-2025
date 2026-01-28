@@ -4,7 +4,7 @@ Ovaj folder sadrži dopunu za finalni projekat koja dodaje **web frontend sa map
 
 ## Struktura
 
-- `getChargersFromClient.js` - Lambda funkcija koja query-uje DynamoDB po gradu (koristi GSI TownIndex)
+- `index.js` - Lambda funkcija koja query-uje DynamoDB po gradu (koristi GSI TownIndex)
 - `web/index.html` - Frontend sa Leaflet mapom za prikaz punjača
 
 ### O Leaflet i OpenStreetMap
@@ -97,7 +97,7 @@ Kompletna aplikacija je dostupna na:
 
 ### CORS greške
 
-Proveri da li `getChargersFromClient.js` ima ispravan `ALLOWED_ORIGIN`:
+Proveri da li lambda funkcija ima ispravan `ALLOWED_ORIGIN`:
 ```javascript
 const ALLOWED_ORIGIN = 'http://punjaci-website.s3-website.localhost.localstack.cloud:4566';
 ```
