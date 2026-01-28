@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="sr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EV Punjači - Mapa</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      .search-form {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+      }
+
+      input[type="text"] {
+        padding: 0.6rem 1rem;
+        font-size: 1rem;
+        border: none;
+        border-radius: 6px;
+        width: 200px;
+      }
+
+      button {
+        padding: 0.6rem 1.2rem;
+        font-size: 1rem;
+        border: none;
+        border-radius: 6px;
+        background: white;
+        color: #667eea;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
+
+      button:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+      }
+
+      .sync-btn {
+        background: rgba(255,255,255,0.2);
+        color: white;
+        border: 1px solid rgba(255,255,255,0.3);
+      }
+
+      #status {
+        font-size: 0.9rem;
+        padding: 0.5rem 1rem;
+        background: rgba(255,255,255,0.1);
+        border-radius: 6px;
+      }
+
+      #map {
+        flex: 1;
+        min-height: 500px;
+      }
+
+      .charger-popup {
+        font-size: 0.9rem;
+        line-height: 1.4;
+      }
+
+      .charger-popup h3 {
+        margin-bottom: 0.5rem;
+        color: #667eea;
+      }
+
+      .charger-popup p {
+        margin: 0.2rem 0;
+      }
+
+      .charger-popup .label {
+        font-weight: bold;
+        color: #555;
+      }
+
+      footer {
+        background: #333;
+        color: white;
+        padding: 0.8rem;
+        text-align: center;
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>⚡ EV Punjači - Srbija</h1>
+      <div class="search-form">
+        <input type="text" id="townInput" placeholder="Unesite grad (npr. Belgrade)" value="Belgrade" />
+        <button id="searchBtn">Pretraži</button>
+        <button id="syncBtn" class="sync-btn">Sync OCM</button>
+      </div>
+      <div id="status"></div>
+    </header>
+
+    <div id="map"></div>
+
+    <footer>
+      Podaci: <a href="https://openchargemap.org" target="_blank" style="color: #667eea;">Open Charge Map</a> | 
+      LocalStack Demo
+    </footer>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      // KONFIGURACIJA - promeni API_ID ako treba
+      // Dobij sa: awslocal apigateway get-rest-apis --query 'items[0].id' --output text
+      const API_ID = '';
+      const API_BASE_URL = `http://localhost:4566/restapis/${API_ID}/dev/_user_request_`;
+      
+      // Inicijalizuj mapu (centrirana na Srbiju)
+      const map = L.map('map').setView([44.0165, 21.0059], 7);
+      
+      // Dodaj OpenStreetMap tile layer
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+
+      // Grupa za markere (da možemo lako obrisati sve)
+      let markersLayer = L.layerGroup().addTo(map);
+
+      // Custom ikona za punjač
+      const chargerIcon = L.divIcon({
+        html: '⚡',
+        className: 'charger-marker',
+        iconSize: [30, 30],
+        iconAnchor: [15, 15],
+      });
+
+      // Funkcija za prikaz punjača na mapi
+      function displayChargers(chargers) {
+        // Obriši postojeće markere
+        markersLayer.clearLayers();
+
+        if (chargers.length === 0) {
+          document.getElementById('status').textContent = 'Nema punjača za ovaj grad';
+          return;
+        }
+
+        const bounds = [];
+
+        chargers.forEach(charger => {
+          if (charger.latitude && charger.longitude) {
+            const marker = L.marker([charger.latitude, charger.longitude])
+              .addTo(markersLayer);
+
+            // Popup sa detaljima
+            const popupContent = `
+              <div class="charger-popup">
+                <h3>${charger.title || 'EV Punjač'}</h3>
+                <p><span class="label">Adresa:</span> ${charger.addressLine1 || 'N/A'}</p>
+                <p><span class="label">Grad:</span> ${charger.town} ${charger.postcode ? `(${charger.postcode})` : ''}</p>
+                <p><span class="label">Broj priključaka:</span> ${charger.numberOfPoints || 'N/A'}</p>
+                <p><span class="label">Verifikovan:</span> ${charger.isRecentlyVerified ? 'Da ✓' : 'Ne'}</p>
+                <p><span class="label">ID:</span> ${charger.chargerId}</p>
+              </div>
+            `;
+            marker.bindPopup(popupContent);
+
+            bounds.push([charger.latitude, charger.longitude]);
+          }
+        });
+
+        // Zumiraj mapu da prikaže sve markere
+        if (bounds.length > 0) {
+          map.fitBounds(bounds, { padding: [50, 50] });
+        }
+
+        document.getElementById('status').textContent = `Prikazano ${chargers.length} punjača`;
+      }
+
+      // Pretraga punjača po gradu
+      async function searchChargers(town) {
+        const status = document.getElementById('status');
+        const searchBtn = document.getElementById('searchBtn');
+
+        searchBtn.disabled = true;
+        searchBtn.textContent = 'Učitavanje...';
+        status.textContent = 'Pretraga...';
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/chargers/${encodeURIComponent(town)}`);
+          const data = await response.json();
+
+          if (response.ok) {
+            displayChargers(data.chargers);
+            console.log('Podaci:', data);
+          } else {
+            status.textContent = 'Greška: ' + (data.error || 'Nepoznata greška');
+          }
+        } catch (error) {
+          status.textContent = 'Greška: ' + error.message;
+          console.error(error);
+        } finally {
+          searchBtn.disabled = false;
+          searchBtn.textContent = 'Pretraži';
+        }
+      }
+
+      // Ovo je više za demonstraciju poziva Lambde koja ažurira DynamoDB tabelu punjača
+      async function syncOCM() {
+        const status = document.getElementById('status');
+        const syncBtn = document.getElementById('syncBtn');
+
+        syncBtn.disabled = true;
+        syncBtn.textContent = 'Sinhronizacija...';
+        status.textContent = 'Sinhronizacija sa OCM...';
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/sync`); // Ovo je endpoint za Lambda funkciju koja ažurira DynamoDB tabelu punjača
+          const data = await response.json();
+          status.textContent = `Sync završen! Upisano: ${data.count}, Obrisano: ${data.deleted}`;
+          console.log('Sync rezultat:', data);
+        } catch (error) {
+          status.textContent = 'Sync greška: ' + error.message;
+          console.error(error);
+        } finally {
+          syncBtn.disabled = false;
+          syncBtn.textContent = 'Sync OCM';
+        }
+      }
+
+      // Event listeneri
+      document.getElementById('searchBtn').addEventListener('click', () => {
+        const town = document.getElementById('townInput').value.trim();
+        if (town) {
+          searchChargers(town);
+        }
+      });
+
+      document.getElementById('townInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          const town = document.getElementById('townInput').value.trim();
+          if (town) {
+            searchChargers(town);
+          }
+        }
+      });
+
+      document.getElementById('syncBtn').addEventListener('click', syncOCM);
+
+      // Automatski učitaj Belgrade punjače na startu
+      // searchChargers('Belgrade');
+    </script>
+  </body>
+</html>
